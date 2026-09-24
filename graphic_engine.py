@@ -80,7 +80,7 @@ def generate_artwork(concept_prompt: str, output_filename: str = "temp_artwork.p
     for attempt in range(1, max_retries + 1):
         try:
             print(f"🌐 Fetching AI artwork (Attempt {attempt}/{max_retries})...")
-            response = requests.get(url, params=params, timeout=30)
+            response = requests.get(url, params=params, timeout=45)
             if response.status_code == 200:
                 break
         except requests.exceptions.RequestException as e:
@@ -121,6 +121,9 @@ def generate_artwork(concept_prompt: str, output_filename: str = "temp_artwork.p
     
     print(f"✅ Artwork processing & validation complete! File saved as: {output_filename}")
     return output_filename
+
+# Function alias to support both import naming formats
+generate_transparent_artwork = generate_artwork
 
 if __name__ == "__main__":
     print("🧪 Testing High-DPI Graphic Engine with Quality Gate...")
