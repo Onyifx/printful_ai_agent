@@ -52,7 +52,7 @@ def inspect_artwork_quality(file_path: str) -> bool:
     print("✅ Quality Gate Passed: Artwork meets high-res Printify production standards.")
     return True
 
-def generate_transparent_artwork(concept_prompt: str, output_filename: str = "temp_artwork.png") -> str:
+def generate_artwork(concept_prompt: str, output_filename: str = "temp_artwork.png") -> str:
     """
     1. Fetches raw generated artwork from AI.
     2. Crops off the bottom watermark region.
@@ -125,5 +125,5 @@ def generate_transparent_artwork(concept_prompt: str, output_filename: str = "te
 if __name__ == "__main__":
     print("🧪 Testing High-DPI Graphic Engine with Quality Gate...")
     test_prompt = "Retro vintage cyber cat wearing sunglasses, 80s synthwave style"
-    saved_path = generate_transparent_artwork(test_prompt, "test_cyber_cat.png")
+    saved_path = generate_artwork(test_prompt, "test_cyber_cat.png")
     print(f"Success! Output generated at: {os.path.abspath(saved_path)}")
