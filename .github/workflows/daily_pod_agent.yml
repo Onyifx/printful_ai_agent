@@ -27,9 +27,9 @@ jobs:
       - name: Execute Autonomous POD Agent
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          PRINTIFY_TOKEN: ${{ secrets.PRINTIFY_API_KEY }}
-          SHOP_ID: ${{ secrets.PRINTIFY_SHOP_ID }}
+          PRINTIFY_TOKEN: ${{ secrets.PRINTIFY_TOKEN }}
+          SHOP_ID: ${{ secrets.SHOP_ID }}
           SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
-          SMTP_PASSWORD: ${{ secrets.SENDER_PASSWORD }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
         run: python main.py
