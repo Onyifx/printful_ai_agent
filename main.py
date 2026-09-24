@@ -10,15 +10,8 @@ from groq import Groq
 # Import trend discovery module
 from trend_discovery import fetch_trending_niches
 
-# Import graphic engine artwork generator
-try:
-    from graphic_engine import generate_artwork
-except ImportError:
-    try:
-        from graphic_engine import generate_transparent_artwork as generate_artwork
-    except ImportError:
-        def generate_artwork(*args, **kwargs):
-            raise ImportError("Could not locate generate_artwork in graphic_engine.py")
+# Import graphic engine artwork generator directly
+from graphic_engine import generate_artwork
 
 from printify_client import get_shop_id, upload_artwork, create_tshirt_product
 from notifier import send_email_report
@@ -29,10 +22,20 @@ load_dotenv()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 if not GROQ_API_KEY:
-    raise ValueError("❌ GROQ_API_KEY is missing from your .env file.")
+    raise ValueError("❌ GROQ_API_KEY is missing from your environment variables.")
 
 # Initialize the Groq Client
 client = Groq(api_key=GROQ_API_KEY)
+
+def safe_send_email(subject: str, html_content: str):
+    """
+    Helper function to safely dispatch email notifications.
+    If email credentials are missing or failing, logs a warning instead of stopping the pipeline.
+    """
+    try:
+        send_email_report(subject, html_content)
+    except Exception as e:
+        print(f"⚠️ Email notification skipped/failed: {e}")
 
 def generate_listing_intelligence(niche_topic: str) -> dict:
     """
@@ -42,7 +45,6 @@ def generate_listing_intelligence(niche_topic: str) -> dict:
     """
     print(f"⚡ [Groq AI Consensus Engine] Initializing multi-model workflow for: '{niche_topic}'...")
     
-    # Specialized models for consensus pipeline
     creator_model = "openai/gpt-oss-120b"
     auditor_model = "qwen/qwen3.8-27b"
     
@@ -81,11 +83,12 @@ def generate_listing_intelligence(niche_topic: str) -> dict:
                 {"role": "user", "content": prompt_text}
             ],
             response_format={"type": "json_object"},
+            max_tokens=1000,
             temperature=0.7,
         )
         draft_intel = json.loads(response_creator.choices[0].message.content)
     except Exception as e:
-        print(f"⚠️ Creator model failed: {e}. Returning fallback structured object.")
+        print(f"⚠️ Creator model failed: {e}. Raising error...")
         raise e
 
     # Step 2: Auditor/Consensus Phase
@@ -109,13 +112,14 @@ def generate_listing_intelligence(niche_topic: str) -> dict:
                 {"role": "user", "content": audit_payload}
             ],
             response_format={"type": "json_object"},
+            max_tokens=1000,
             temperature=0.4,
         )
         final_intel = json.loads(response_auditor.choices[0].message.content)
         print("✅ Multi-model consensus reached: Metadata successfully audited and upgraded!")
         return final_intel
     except Exception as e:
-        print(f"⚠️ Auditor model review skipped due to error: {e}. Using creator draft.")
+        print(f"⚠️ Auditor model review skipped due to rate limit or error: {e}. Using creator draft.")
         return draft_intel
 
 def run_pipeline(niche_topic: str):
@@ -172,7 +176,7 @@ def run_pipeline(niche_topic: str):
         print(f"🆔 Printify Product ID: {product.get('id')}")
         print("==================================================")
 
-        # 6. Dispatch Success Email Report
+        # 6. Dispatch Success Email Report safely
         success_html = f"""
         <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #f9fff9;">
             <h2 style="color: #27ae60;">🎉 Autonomous POD Product Published!</h2>
@@ -187,14 +191,14 @@ def run_pipeline(niche_topic: str):
             <p style="color: #7f8c8d; font-size: 12px;">Autonomous Multi-Model AI Agent Report</p>
         </div>
         """
-        send_email_report(f"🚀 Autonomous POD Success: {intel.get('title')}", success_html)
+        safe_send_email(f"🚀 Autonomous POD Success: {intel.get('title')}", success_html)
 
     except Exception as e:
         elapsed = time.time() - start_time
         error_message = str(e)
         print(f"\n❌ Pipeline failed with error: {error_message}")
         
-        # Dispatch Failure Email Report
+        # Dispatch Failure Email Report safely
         failure_html = f"""
         <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ffccd5; border-radius: 8px; background-color: #fff5f5;">
             <h2 style="color: #c0392b;">❌ Autonomous POD Pipeline Failed</h2>
@@ -208,7 +212,7 @@ def run_pipeline(niche_topic: str):
             <p style="color: #7f8c8d; font-size: 12px;">Autonomous Multi-Model AI Agent Error Report</p>
         </div>
         """
-        send_email_report(f"⚠️ Autonomous POD Pipeline Failure: {niche_topic}", failure_html)
+        safe_send_email(f"⚠️ Autonomous POD Pipeline Failure: {niche_topic}", failure_html)
         raise e
 
 if __name__ == "__main__":
