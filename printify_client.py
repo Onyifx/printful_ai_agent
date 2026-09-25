@@ -122,7 +122,10 @@ def get_valid_blueprint_config(blueprint_id: int = 6, max_variants: int = 4):
     raise Exception(f"Failed to fetch variants for blueprint {blueprint_id} with provider {print_provider_id}: {res.text}")
 
 def create_tshirt_product(shop_id: str, title: str, description: str, image_id: str) -> dict:
-    """Creates a print-on-demand t-shirt product draft on Printify using live configuration."""
+    """
+    Creates a print-on-demand t-shirt product draft on Printify with high-impact,
+    upper-chest, 80% full-chest artwork placement parameters.
+    """
     print(f"👕 Creating T-Shirt product in Printify Shop ID '{shop_id}'...")
     url = f"{BASE_URL}/shops/{shop_id}/products.json"
 
@@ -147,9 +150,9 @@ def create_tshirt_product(shop_id: str, title: str, description: str, image_id: 
                         "images": [
                             {
                                 "id": image_id,
-                                "x": 0.5,
-                                "y": 0.5,
-                                "scale": 1.0,
+                                "x": 0.50,      # Perfectly centered horizontally
+                                "y": 0.28,      # Positioned high on the upper chest
+                                "scale": 0.80,  # Scaled to 80% full-chest width
                                 "angle": 0
                             }
                         ]
