@@ -53,7 +53,7 @@ def generate_listing_intelligence(niche_topic: str) -> dict:
         "specializing in high-volume Print-on-Demand (POD) e-commerce. "
         "Your mission is to generate hyper-optimized listing copy, rank-focused SEO tags, "
         "demographic positioning, and ultra-precise image synthesis prompts optimized for t-shirt graphics. "
-        "You MUST output valid JSON only."
+        "You MUST output valid, concise JSON strictly without conversational filler."
     )
     
     prompt_text = f"""
@@ -62,7 +62,7 @@ def generate_listing_intelligence(niche_topic: str) -> dict:
     Generate a JSON object containing the following keys:
     1. "title": An SEO-optimized title (between 40-80 characters) packed with high-intent keywords.
     2. "short_description": A 2-sentence catchy sales hook highlighting lifestyle fit and aesthetic appeal.
-    3. "description": A full 3-paragraph product description detailing graphic style, comfort, print quality, and gift positioning.
+    3. "description": A full product description detailing graphic style, comfort, print quality, and gift positioning.
     4. "tags": An array of exactly 13 search tags (comma-separated style keywords) formatted for Etsy/Shopify search engines.
     5. "target_audience": Primary demographic profile (e.g., "Gamers 18-34, Synthwave enthusiasts, Cyberpunk fans").
     6. "recommended_color_palette": Suggested apparel fabric background colors that make the print pop.
@@ -83,7 +83,7 @@ def generate_listing_intelligence(niche_topic: str) -> dict:
                 {"role": "user", "content": prompt_text}
             ],
             response_format={"type": "json_object"},
-            max_tokens=1000,
+            max_tokens=2048,  # Increased from 1000 to prevent JSON truncation errors
             temperature=0.7,
         )
         draft_intel = json.loads(response_creator.choices[0].message.content)
@@ -112,7 +112,7 @@ def generate_listing_intelligence(niche_topic: str) -> dict:
                 {"role": "user", "content": audit_payload}
             ],
             response_format={"type": "json_object"},
-            max_tokens=1000,
+            max_tokens=2048,  # Increased from 1000 to ensure full response generation
             temperature=0.4,
         )
         final_intel = json.loads(response_auditor.choices[0].message.content)
