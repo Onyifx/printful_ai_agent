@@ -78,7 +78,7 @@ def upload_artwork(file_path: str, retries: int = 4, delay: int = 10) -> str:
                 print(f"✅ Upload successful! Media Image ID: {image_data.get('id')}")
                 return str(image_data.get('id'))
             elif res.status_code in [502, 503, 504]:
-                print(f"⚠️ Printify API returned server error {res.status_code}. Retrying in {delay} seconds (Attempt {attempt}/{retries})...")
+                print(f"⚠️ Printify API server error {res.status_code}. Retrying in {delay} seconds (Attempt {attempt}/{retries})...")
                 time.sleep(delay)
                 delay *= 2
             else:
@@ -121,17 +121,27 @@ def get_valid_blueprint_config(blueprint_id: int = 12, max_variants: int = 4):
             
     raise Exception(f"Failed to fetch variants for blueprint {blueprint_id} with provider {print_provider_id}: {res.text}")
 
-def create_tshirt_product(shop_id: str, title: str, description: str, image_id: str) -> dict:
+def create_tshirt_product(shop_id: str, title: str, description: str, image_id: str, tags: list = None) -> dict:
     """
     Creates a print-on-demand streetwear t-shirt draft on Printify using premium 
-    Bella + Canvas 3001 blanks and 80% full-chest upper placement settings.
+    Bella + Canvas 3001 blanks, 80% full-chest placement, and automated SEO tags.
     """
     print(f"👕 Creating T-Shirt product in Printify Shop ID '{shop_id}'...")
     url = f"{BASE_URL}/shops/{shop_id}/products.json"
 
     # Blueprint 12 = Bella + Canvas 3001 Unisex Jersey Short Sleeve Tee
-    # (To switch to Comfort Colors 1717 Vintage Tee, change blueprint_id to 382)
     blueprint_id = 12
+
+    # Default fallback tags if no custom tags array is supplied by the caller
+    if not tags:
+        tags = [
+            "streetwear", "graphic tee", "vintage shirt", "retro aesthetic", 
+            "y2k fashion", "unisex shirt", "synthwave", "cyberpunk tee", 
+            "oversized fit", "minimalist tee", "90s style", "gift for him", "trendy tshirt"
+        ]
+
+    # Enforce maximum 13 tags limit required by Etsy and Printify
+    tags = tags[:13]
 
     # Dynamically fetch valid print provider and variant IDs for Blueprint 12
     print_provider_id, variant_ids = get_valid_blueprint_config(blueprint_id)
@@ -143,6 +153,7 @@ def create_tshirt_product(shop_id: str, title: str, description: str, image_id: 
         "blueprint_id": blueprint_id,
         "print_provider_id": print_provider_id,
         "variants": variants_payload,
+        "tags": tags,  # Injected SEO tags list to resolve 0/13 tags warning
         "print_areas": [
             {
                 "variant_ids": variant_ids,
