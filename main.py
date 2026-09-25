@@ -27,6 +27,17 @@ if not GROQ_API_KEY:
 # Initialize the Groq Client
 client = Groq(api_key=GROQ_API_KEY)
 
+# System prompt addition for generating high-impact streetwear graphics
+STREETWEAR_PROMPT_SYSTEM = """
+You are an expert streetwear graphic designer specializing in high-converting Print-on-Demand apparel artwork for platforms like Etsy and Temu.
+
+When generating an image prompt, enforce these exact rules:
+1. DESIGN STYLE: Create bold, high-contrast, full-chest graphic tee artwork (options: Vintage Japanese Cyberpunk, Y2K Grunge, Bold Varsity Typography, Heavy Metal Dark Fantasy, High-Contrast Neon Illustrative).
+2. COMPOSITION: The graphic must cover a large surface area with intricate detail, crisp vector lines, or high-definition vintage textures.
+3. BACKGROUND: Isolated on a solid black or transparent background so it seamlessly blends into dark t-shirts.
+4. NO MOCKUPS: Generate ONLY the artwork itself—do NOT include T-shirts, hangers, models, shadows, or store backgrounds in the image.
+"""
+
 def safe_send_email(subject: str, html_content: str):
     """
     Helper function to safely dispatch email notifications.
@@ -40,7 +51,7 @@ def safe_send_email(subject: str, html_content: str):
 def generate_listing_intelligence(niche_topic: str) -> dict:
     """
     Executes a Multi-Model Consensus Pipeline:
-    1. Primary Creator Model generates the initial e-commerce metadata package.
+    1. Primary Creator Model generates the initial e-commerce metadata package with streetwear artwork rules.
     2. Auditor/Refiner Model reviews, critiques, and optimizes the content for maximum conversions and SEO.
     """
     print(f"⚡ [Groq AI Consensus Engine] Initializing multi-model workflow for: '{niche_topic}'...")
@@ -49,10 +60,11 @@ def generate_listing_intelligence(niche_topic: str) -> dict:
     auditor_model = "qwen/qwen3.8-27b"
     
     system_instruction_creator = (
+        f"{STREETWEAR_PROMPT_SYSTEM}\n\n"
         "You are an elite E-Commerce Intelligence Engine and Senior Graphic Art Director "
         "specializing in high-volume Print-on-Demand (POD) e-commerce. "
         "Your mission is to generate hyper-optimized listing copy, rank-focused SEO tags, "
-        "demographic positioning, and ultra-precise image synthesis prompts optimized for t-shirt graphics. "
+        "demographic positioning, and ultra-precise image synthesis prompts optimized for streetwear t-shirt graphics. "
         "You MUST output valid, concise JSON strictly without conversational filler."
     )
     
@@ -67,10 +79,7 @@ def generate_listing_intelligence(niche_topic: str) -> dict:
     5. "target_audience": Primary demographic profile (e.g., "Gamers 18-34, Synthwave enthusiasts, Cyberpunk fans").
     6. "recommended_color_palette": Suggested apparel fabric background colors that make the print pop.
     7. "suggested_retail_price": Float value representing the competitive retail price (e.g., 26.99).
-    8. "image_prompt": A master graphic prompt engineered for AI image generation. Must specify:
-       - Subject and composition
-       - Visual style (e.g., vector illustration, high contrast line art, crisp edges)
-       - Isolation instruction: "isolated on a plain black background, zero text, vector art style, graphic tee design".
+    8. "image_prompt": A master graphic prompt engineered for AI image generation. Must strictly follow the STREETWEAR_PROMPT_SYSTEM rules: bold, full-chest graphic tee artwork, edge-to-edge coverage, isolated on a solid black or transparent background, zero clothing mockups or human models.
     """
 
     # Step 1: Creator Phase
@@ -83,7 +92,7 @@ def generate_listing_intelligence(niche_topic: str) -> dict:
                 {"role": "user", "content": prompt_text}
             ],
             response_format={"type": "json_object"},
-            max_tokens=2048,  # Increased from 1000 to prevent JSON truncation errors
+            max_tokens=2048,
             temperature=0.7,
         )
         draft_intel = json.loads(response_creator.choices[0].message.content)
@@ -95,10 +104,11 @@ def generate_listing_intelligence(niche_topic: str) -> dict:
     print(f"🧐 [Auditor Agent - {auditor_model}] Reviewing and optimizing metadata package for SEO and buyer conversion...")
     
     audit_instruction = (
+        f"{STREETWEAR_PROMPT_SYSTEM}\n\n"
         "You are a strict Chief Marketing Officer and E-Commerce Quality Assurance Auditor. "
         "Review the provided JSON draft for a Print-on-Demand t-shirt. "
         "Enhance the SEO keywords in the title, tighten the description hooks, ensure exactly 13 high-value search tags, "
-        "and polish the image prompt to guarantee pristine visual output. "
+        "and enforce that the image prompt strictly generates full-chest streetwear artwork without mockups. "
         "You MUST return the final, improved version as a valid JSON object maintaining the exact same keys."
     )
     
@@ -112,7 +122,7 @@ def generate_listing_intelligence(niche_topic: str) -> dict:
                 {"role": "user", "content": audit_payload}
             ],
             response_format={"type": "json_object"},
-            max_tokens=1000,  # Increased from 1000 to ensure full response generation
+            max_tokens=2048,
             temperature=0.4,
         )
         final_intel = json.loads(response_auditor.choices[0].message.content)
