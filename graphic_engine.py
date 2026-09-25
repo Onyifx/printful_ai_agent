@@ -4,6 +4,7 @@ import time
 import requests
 from PIL import Image
 from rembg import remove
+from urllib.parse import quote
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -39,7 +40,7 @@ def inspect_artwork_quality(file_path: str) -> bool:
             
         # Check alpha channel transparency balance
         alpha_channel = img.getchannel("A")
-        extrema = alpha_channel.getextrema() # Returns (min, max) alpha values (0 to 255)
+        extrema = alpha_channel.getextrema()  # Returns (min, max) alpha values (0 to 255)
         
         # If min and max are both 255, it has zero transparency (background wasn't stripped)
         if extrema[0] == 255 and extrema[1] == 255:
@@ -52,9 +53,9 @@ def inspect_artwork_quality(file_path: str) -> bool:
     print("✅ Quality Gate Passed: Artwork meets high-res Printify production standards.")
     return True
 
-def generate_artwork(concept_prompt: str, output_filename: str = "temp_artwork.png") -> str:
+def generate_artwork(concept_prompt: str, output_filename: str = "temp_artwork.png", retries: int = 4) -> str:
     """
-    1. Fetches raw generated artwork from AI.
+    1. Fetches raw generated artwork from Pollinations AI with browser headers & model fallback.
     2. Crops off the bottom watermark region.
     3. Strips background using rembg (transparent PNG).
     4. Upscales to 3000x3000px @ 300 DPI for high-print quality.
@@ -64,34 +65,47 @@ def generate_artwork(concept_prompt: str, output_filename: str = "temp_artwork.p
     print(f"🎨 [1/5] Generating raw artwork for prompt: '{concept_prompt}'...")
     
     styled_prompt = f"{concept_prompt}, high contrast graphic vector art, t-shirt design style, isolated subject on plain background"
-    
-    # Pollinations image generation endpoint with flux model
-    url = f"https://image.pollinations.ai/prompt/{requests.utils.quote(styled_prompt)}"
-    params = {
-        "width": 1024,
-        "height": 1024,
-        "model": "flux",
-        "nologo": "true",
-        "private": "true"
+    clean_prompt = styled_prompt.strip().replace("\n", " ")
+    encoded_prompt = quote(clean_prompt)
+
+    # Headers required to bypass automated request blocking on GitHub Actions runners
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
     }
+
+    # Model endpoints to try in sequence if primary fails
+    models_to_try = ["flux", "turbo", "default"]
     
-    max_retries = 3
     response = None
-    for attempt in range(1, max_retries + 1):
+    for attempt in range(1, retries + 1):
+        model = models_to_try[(attempt - 1) % len(models_to_try)]
+        
+        if model == "default":
+            url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true&seed={int(time.time())}"
+        else:
+            url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true&model={model}&seed={int(time.time())}"
+
+        print(f"🌐 [Attempt {attempt}/{retries}] Fetching AI artwork from Pollinations AI (Model: {model})...")
+
         try:
-            print(f"🌐 Fetching AI artwork (Attempt {attempt}/{max_retries})...")
-            response = requests.get(url, params=params, timeout=45)
-            if response.status_code == 200:
+            res = requests.get(url, headers=headers, timeout=60)
+            if res.status_code == 200 and len(res.content) > 5000:
+                response = res
+                print(f"✅ Downloaded raw artwork ({len(res.content) / 1024:.1f} KB)")
                 break
-        except requests.exceptions.RequestException as e:
-            print(f"⚠️ Network error on attempt {attempt}: {e}")
-            if attempt < max_retries:
-                time.sleep(3)
+            else:
+                print(f"⚠️ Pollinations AI returned status {res.status_code} or incomplete data. Retrying in {attempt * 5}s...")
+                time.sleep(attempt * 5)
+        except requests.RequestException as e:
+            print(f"⚠️ Network error on attempt {attempt}: {e}. Retrying in {attempt * 5}s...")
+            time.sleep(attempt * 5)
 
     if not response or response.status_code != 200:
         status = response.status_code if response else "No Response"
-        raise Exception(f"Failed to retrieve image from Pollinations AI (Status: {status}).")
-    
+        raise Exception(f"Failed to retrieve image from Pollinations AI after {retries} attempts (Status: {status}).")
+
     # Load raw image into PIL
     raw_img = Image.open(io.BytesIO(response.content))
     
