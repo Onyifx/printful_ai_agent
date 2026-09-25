@@ -50,7 +50,7 @@ def inspect_artwork_quality(file_path: str) -> bool:
 
 def fetch_from_pollinations(clean_prompt: str, headers: dict) -> bytes:
     """Attempts generation via Pollinations AI with optimized model routing."""
-    short_prompt = clean_prompt[:120].strip()
+    short_prompt = clean_prompt[:140].strip()
     encoded_prompt = quote(short_prompt)
     seed = random.randint(1000, 9999)
     
@@ -62,7 +62,7 @@ def fetch_from_pollinations(clean_prompt: str, headers: dict) -> bytes:
     
     for url in endpoints:
         try:
-            res = requests.get(url, headers=headers, timeout=30)
+            res = requests.get(url, headers=headers, timeout=35)
             if res.status_code == 200 and len(res.content) > 5000:
                 print("✅ Successfully retrieved raw artwork from Pollinations AI.")
                 return res.content
@@ -75,7 +75,7 @@ def fetch_from_pollinations(clean_prompt: str, headers: dict) -> bytes:
 def fetch_from_lexica_fallback(clean_prompt: str, headers: dict) -> bytes:
     """Fallback engine using Lexica public API if Pollinations is offline."""
     print("🔄 Switching to Fallback Image Engine (Lexica API)...")
-    short_prompt = clean_prompt[:80].strip()
+    short_prompt = clean_prompt[:100].strip()
     search_url = f"https://lexica.art/api/v1/search?q={quote(short_prompt)}"
     
     try:
@@ -104,7 +104,7 @@ def generate_local_fallback_artwork() -> bytes:
     img = Image.new("RGBA", (1024, 1024), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     
-    # Render geometric t-shirt graphic emblem
+    # Render geometric streetwear emblem
     draw.ellipse((150, 150, 874, 874), fill=(20, 20, 20, 255), outline=(240, 240, 240, 255), width=16)
     draw.polygon([(512, 250), (762, 750), (262, 750)], fill=(230, 230, 230, 255))
     draw.ellipse((412, 412, 612, 612), fill=(10, 10, 10, 255))
@@ -116,16 +116,16 @@ def generate_local_fallback_artwork() -> bytes:
 
 def generate_artwork(concept_prompt: str, output_filename: str = "temp_artwork.png") -> str:
     """
-    1. Fetches raw AI artwork using primary + fallback providers.
-    2. Uses local fail-safe vector generation if cloud APIs block GitHub runner IPs.
-    3. Crops off watermark/footer regions.
+    1. Fetches raw AI visual artwork using primary + fallback providers.
+    2. Uses local fail-safe vector generation if cloud APIs block runner IPs.
+    3. Crops off potential watermark/footer regions.
     4. Strips background using rembg (transparent PNG).
     5. Upscales to 3000x3000px @ 300 DPI.
     6. Executes Visual Quality Gate inspection.
     """
-    print(f"🎨 [1/5] Generating artwork for prompt: '{concept_prompt}'...")
+    print(f"🎨 [1/5] Generating graphic artwork for prompt: '{concept_prompt}'...")
     
-    clean_prompt = f"{concept_prompt}, high contrast graphic vector art, t-shirt design, isolated subject on solid background".strip().replace("\n", " ")
+    clean_prompt = f"{concept_prompt}, high contrast streetwear graphic art, isolated subject on solid dark background".strip().replace("\n", " ")
 
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -147,9 +147,9 @@ def generate_artwork(concept_prompt: str, output_filename: str = "temp_artwork.p
         except Exception as e:
             print(f"⚠️ Secondary Fallback Engine unavailable: {e}")
 
-    # Attempt 3: Local Fail-safe Canvas (Bypasses GitHub runner Cloudflare IP blocks)
+    # Attempt 3: Local Fail-safe Canvas
     if not raw_bytes:
-        print("⚠️ All cloud image providers blocked/unavailable on GitHub Action runner IP. Triggering local vector generator fallback...")
+        print("⚠️ All cloud image providers blocked/unavailable. Triggering local vector generator fallback...")
         raw_bytes = generate_local_fallback_artwork()
 
     # Process retrieved image
@@ -187,6 +187,6 @@ def generate_artwork(concept_prompt: str, output_filename: str = "temp_artwork.p
 generate_transparent_artwork = generate_artwork
 
 if __name__ == "__main__":
-    test_prompt = "Retro vintage cyber cat wearing sunglasses, 80s synthwave style"
-    saved_path = generate_artwork(test_prompt, "test_cyber_cat.png")
+    test_prompt = "Vintage 90s racing motorcycle illustration, bold streetwear aesthetic"
+    saved_path = generate_artwork(test_prompt, "test_biker_artwork.png")
     print(f"Success! Output generated at: {os.path.abspath(saved_path)}")
