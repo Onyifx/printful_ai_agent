@@ -90,10 +90,10 @@ def upload_artwork(file_path: str, retries: int = 4, delay: int = 10) -> str:
 
     raise Exception(f"Failed to upload image to Printify after {retries} attempts.")
 
-def get_valid_blueprint_config(blueprint_id: int = 6, max_variants: int = 4):
+def get_valid_blueprint_config(blueprint_id: int = 12, max_variants: int = 4):
     """
-    Dynamically fetches an active print provider and valid variant IDs 
-    handling both list and dict API response formats safely.
+    Dynamically fetches an active print provider and valid variant IDs for the selected blueprint.
+    Handles both list and dictionary API response formats safely.
     """
     providers_url = f"{BASE_URL}/catalog/blueprints/{blueprint_id}/print_providers.json"
     res = requests.get(providers_url, headers=get_headers(), timeout=30)
@@ -123,17 +123,19 @@ def get_valid_blueprint_config(blueprint_id: int = 6, max_variants: int = 4):
 
 def create_tshirt_product(shop_id: str, title: str, description: str, image_id: str) -> dict:
     """
-    Creates a print-on-demand t-shirt product draft on Printify with high-impact,
-    upper-chest, 80% full-chest artwork placement parameters.
+    Creates a print-on-demand streetwear t-shirt draft on Printify using premium 
+    Bella + Canvas 3001 blanks and 80% full-chest upper placement settings.
     """
     print(f"👕 Creating T-Shirt product in Printify Shop ID '{shop_id}'...")
     url = f"{BASE_URL}/shops/{shop_id}/products.json"
 
-    blueprint_id = 6  # Gildan 5000
+    # Blueprint 12 = Bella + Canvas 3001 Unisex Jersey Short Sleeve Tee
+    # (To switch to Comfort Colors 1717 Vintage Tee, change blueprint_id to 382)
+    blueprint_id = 12
 
-    # Dynamically fetch valid print provider and variant IDs
+    # Dynamically fetch valid print provider and variant IDs for Blueprint 12
     print_provider_id, variant_ids = get_valid_blueprint_config(blueprint_id)
-    variants_payload = [{"id": v_id, "price": 2499, "is_enabled": True} for v_id in variant_ids]
+    variants_payload = [{"id": v_id, "price": 2699, "is_enabled": True} for v_id in variant_ids]
 
     payload = {
         "title": title,
