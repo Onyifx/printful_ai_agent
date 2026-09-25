@@ -10,8 +10,8 @@ from groq import Groq
 # Import trend discovery module
 from trend_discovery import fetch_trending_niches
 
-# Import graphic engine artwork generator directly
-from graphic_engine import generate_artwork
+# Import graphic engine artwork generator directly from design_generator
+from design_generator import generate_streetwear_design
 
 from printify_client import get_shop_id, upload_artwork, create_tshirt_product
 from notifier import send_email_report
@@ -122,7 +122,7 @@ def generate_listing_intelligence(niche_topic: str) -> dict:
                 {"role": "user", "content": audit_payload}
             ],
             response_format={"type": "json_object"},
-            max_tokens=2048,
+            max_tokens=1000,
             temperature=0.4,
         )
         final_intel = json.loads(response_auditor.choices[0].message.content)
@@ -154,7 +154,7 @@ def run_pipeline(niche_topic: str):
 
         # 2. Artwork Generation & Processing
         filename = f"groq_{niche_topic.lower().replace(' ', '_')}.png"
-        image_path = generate_artwork(intel["image_prompt"], filename)
+        image_path = generate_streetwear_design(title_text=intel.get("title", niche_topic), output_path=filename)
         
         # 3. Printify Shop Connection
         shop_id = get_shop_id()
