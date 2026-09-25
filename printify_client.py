@@ -9,12 +9,50 @@ load_dotenv()
 
 BASE_URL = "https://api.printify.com/v1"
 
+# Extended Printify Garment Catalog Mapping (Tops + Bottoms)
+GARMENT_CATALOG = {
+    # TOPS
+    "standard_tee": {
+        "blueprint_id": 12,       # Bella + Canvas 3001 Unisex Tee
+        "default_price": 2999,
+        "name": "Bella + Canvas 3001 Unisex Tee",
+        "category": "top"
+    },
+    "oversized_tee": {
+        "blueprint_id": 706,      # Comfort Colors 1717 Heavyweight Vintage Tee
+        "default_price": 3499,
+        "name": "Comfort Colors 1717 Heavyweight Tee",
+        "category": "top"
+    },
+    "hoodie": {
+        "blueprint_id": 77,       # Gildan 18500 Heavy Blend Hoodie
+        "default_price": 4999,
+        "name": "Gildan 18500 Heavy Blend Hoodie",
+        "category": "top"
+    },
+    "sweatshirt": {
+        "blueprint_id": 49,       # Gildan 18000 Crewneck Sweatshirt
+        "default_price": 4299,
+        "name": "Gildan 18000 Crewneck Sweatshirt",
+        "category": "top"
+    },
+    # BOTTOMS
+    "sweatshorts": {
+        "blueprint_id": 804,      # Streetwear Fleece Shorts
+        "default_price": 3499,
+        "name": "Streetwear Fleece Sweatshorts",
+        "category": "bottom"
+    },
+    "joggers": {
+        "blueprint_id": 1398,     # Gildan Unisex Sweatpants
+        "default_price": 4499,
+        "name": "Gildan Unisex Sweatpants",
+        "category": "bottom"
+    }
+}
+
 def get_clean_api_key() -> str:
-    """
-    Retrieves and sanitizes the Printify API token/key by stripping newlines, 
-    carriage returns, spaces, and quotes that cause HTTP header errors.
-    Supports both PRINTIFY_TOKEN and PRINTIFY_API_KEY environment variables.
-    """
+    """Retrieves and sanitizes the Printify API token/key."""
     key = os.getenv("PRINTIFY_TOKEN") or os.getenv("PRINTIFY_API_KEY", "")
     if not key:
         raise ValueError("❌ PRINTIFY_TOKEN or PRINTIFY_API_KEY is missing from environment variables.")
@@ -48,10 +86,7 @@ def get_shop_id() -> str:
     raise Exception(f"Failed to fetch Printify Shop ID: {res.status_code} - {res.text}")
 
 def upload_artwork(file_path: str, retries: int = 4, delay: int = 10) -> str:
-    """
-    Encodes artwork as base64 and uploads it to the Printify Media Library
-    with retry logic, dynamic headers, and extended timeout for large files.
-    """
+    """Encodes artwork as base64 and uploads it to the Printify Media Library."""
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"Artwork file not found at path: {file_path}")
 
@@ -71,7 +106,6 @@ def upload_artwork(file_path: str, retries: int = 4, delay: int = 10) -> str:
 
     for attempt in range(1, retries + 1):
         try:
-            # Extended timeout to 120 seconds for high-resolution graphics
             res = requests.post(url, json=payload, headers=get_headers(), timeout=120)
             if res.status_code in [200, 201]:
                 image_data = res.json()
@@ -91,12 +125,16 @@ def upload_artwork(file_path: str, retries: int = 4, delay: int = 10) -> str:
     raise Exception(f"Failed to upload image to Printify after {retries} attempts.")
 
 def get_valid_blueprint_config(blueprint_id: int = 12, max_variants: int = 4):
-    """
-    Dynamically fetches an active print provider and valid variant IDs for the selected blueprint.
-    Handles both list and dictionary API response formats safely.
-    """
+    """Dynamically parses exact print provider and valid placeholder positions from the variant API array."""
+    # 1. Fetch Print Providers
     providers_url = f"{BASE_URL}/catalog/blueprints/{blueprint_id}/print_providers.json"
     res = requests.get(providers_url, headers=get_headers(), timeout=30)
+    
+    if res.status_code == 404:
+        print(f"⚠️ Warning: Blueprint {blueprint_id} not found. Falling back to 1398 (Gildan Sweatpants)...")
+        blueprint_id = 1398
+        res = requests.get(f"{BASE_URL}/catalog/blueprints/1398/print_providers.json", headers=get_headers(), timeout=30)
+
     if res.status_code != 200:
         raise Exception(f"Failed to fetch print providers for blueprint {blueprint_id}: {res.text}")
     
@@ -107,45 +145,64 @@ def get_valid_blueprint_config(blueprint_id: int = 12, max_variants: int = 4):
         raise Exception(f"No active print providers found for blueprint {blueprint_id}")
     
     print_provider_id = providers[0]["id"]
-    print(f"ℹ️ Selected Print Provider ID: {print_provider_id} for Blueprint {blueprint_id}")
 
+    # 2. Fetch specific variant IDs AND extract EXACT valid placeholders from the variant data
     variants_url = f"{BASE_URL}/catalog/blueprints/{blueprint_id}/print_providers/{print_provider_id}/variants.json"
-    res = requests.get(variants_url, headers=get_headers(), timeout=30)
-    if res.status_code == 200:
-        variants_data = res.json()
+    res_variants = requests.get(variants_url, headers=get_headers(), timeout=30)
+    
+    if res_variants.status_code == 200:
+        variants_data = res_variants.json()
         variants = variants_data if isinstance(variants_data, list) else variants_data.get("variants", [])
         
+        placeholder_position = "front" # Ultimate Fallback
+        
         if variants:
-            variant_ids = [v["id"] for v in variants[:max_variants]]
-            return print_provider_id, variant_ids
+            # Extract placeholders directly from what the provider supports for this blueprint
+            first_variant = variants[0]
+            placeholders = first_variant.get("placeholders", [])
             
-    raise Exception(f"Failed to fetch variants for blueprint {blueprint_id} with provider {print_provider_id}: {res.text}")
+            valid_positions = [p.get("position") for p in placeholders if "position" in p]
+            
+            if valid_positions:
+                # If bottom garment, look for any leg/thigh/left/right print position
+                if blueprint_id in [1398, 804]:
+                    leg_positions = [p for p in valid_positions if "leg" in p.lower() or "left" in p.lower() or "right" in p.lower()]
+                    placeholder_position = leg_positions[0] if leg_positions else valid_positions[0]
+                else:
+                    # Top garments will naturally pull "front" or whatever the first valid tag is
+                    placeholder_position = valid_positions[0]
+            
+            print(f"🔧 Found Print Provider {print_provider_id}. API strictly locked to placeholder: '{placeholder_position}'")
 
-def create_tshirt_product(shop_id: str, title: str, description: str, image_id: str, tags: list = None) -> dict:
-    """
-    Creates a print-on-demand streetwear t-shirt draft on Printify using premium 
-    Bella + Canvas 3001 blanks, 80% full-chest placement, and automated SEO tags.
-    """
-    print(f"👕 Creating T-Shirt product in Printify Shop ID '{shop_id}'...")
+            # Filter active variants
+            active_variants = [v for v in variants if v.get("is_enabled", True)]
+            if not active_variants:
+                active_variants = variants
+                
+            variant_ids = [v["id"] for v in active_variants[:max_variants]]
+            return print_provider_id, variant_ids, placeholder_position
+            
+    raise Exception(f"Failed to fetch variants for blueprint {blueprint_id} with provider {print_provider_id}: {res_variants.text}")
+
+def create_single_product(shop_id: str, title: str, description: str, image_id: str, tags: list, garment_type: str) -> dict:
+    """Internal helper to create a single product on Printify with dynamic print positioning."""
+    garment_info = GARMENT_CATALOG.get(garment_type.lower(), GARMENT_CATALOG["standard_tee"])
+    blueprint_id = garment_info["blueprint_id"]
+    default_price = garment_info["default_price"]
+    is_bottom = garment_info.get("category") == "bottom"
+
+    print(f"👕 Creating apparel product '{garment_info['name']}' in Printify Shop ID '{shop_id}'...")
     url = f"{BASE_URL}/shops/{shop_id}/products.json"
 
-    # Blueprint 12 = Bella + Canvas 3001 Unisex Jersey Short Sleeve Tee
-    blueprint_id = 12
+    tags = (tags or ["streetwear", "graphic tee", "vintage fashion"])[:13]
+    
+    # Retrieves strict, dynamic configuration directly from Printify's catalog
+    print_provider_id, variant_ids, placeholder_position = get_valid_blueprint_config(blueprint_id)
+    variants_payload = [{"id": v_id, "price": default_price, "is_enabled": True} for v_id in variant_ids]
 
-    # Default fallback tags if no custom tags array is supplied by the caller
-    if not tags:
-        tags = [
-            "streetwear", "graphic tee", "vintage shirt", "retro aesthetic", 
-            "y2k fashion", "unisex shirt", "synthwave", "cyberpunk tee", 
-            "oversized fit", "minimalist tee", "90s style", "gift for him", "trendy tshirt"
-        ]
-
-    # Enforce maximum 13 tags limit required by Etsy and Printify
-    tags = tags[:13]
-
-    # Dynamically fetch valid print provider and variant IDs for Blueprint 12
-    print_provider_id, variant_ids = get_valid_blueprint_config(blueprint_id)
-    variants_payload = [{"id": v_id, "price": 2699, "is_enabled": True} for v_id in variant_ids]
+    pos_y = 0.40 if is_bottom else 0.28
+    pos_x = 0.35 if is_bottom else 0.50
+    scale = 0.45 if is_bottom else 0.80
 
     payload = {
         "title": title,
@@ -153,19 +210,19 @@ def create_tshirt_product(shop_id: str, title: str, description: str, image_id: 
         "blueprint_id": blueprint_id,
         "print_provider_id": print_provider_id,
         "variants": variants_payload,
-        "tags": tags,  # Injected SEO tags list to resolve 0/13 tags warning
+        "tags": tags,
         "print_areas": [
             {
                 "variant_ids": variant_ids,
                 "placeholders": [
                     {
-                        "position": "front",
+                        "position": placeholder_position,
                         "images": [
                             {
                                 "id": image_id,
-                                "x": 0.50,      # Perfectly centered horizontally
-                                "y": 0.28,      # Positioned high on the upper chest
-                                "scale": 0.80,  # Scaled to 80% full-chest width
+                                "x": pos_x,
+                                "y": pos_y,
+                                "scale": scale,
                                 "angle": 0
                             }
                         ]
@@ -181,3 +238,36 @@ def create_tshirt_product(shop_id: str, title: str, description: str, image_id: 
         print(f"🎉 Product created successfully! Product ID: {product_data.get('id')}")
         return product_data
     raise Exception(f"Failed to create product on Printify: {res.text}")
+
+def create_matching_set_products(shop_id: str, top_title: str, bottom_title: str, description: str, image_id: str, tags: list, top_garment: str = "oversized_tee", bottom_garment: str = "sweatshorts") -> dict:
+    """
+    Creates both the Top and Bottom products on Printify in a single execution,
+    forming a complete, coordinated 'Up and Down' streetwear set.
+    """
+    print("\n🔥 [Printify Dual Creation] Building matching 'Up & Down' apparel set...")
+    
+    top_product = create_single_product(
+        shop_id=shop_id,
+        title=top_title,
+        description=f"{description}\n\n• Part of a matching two-piece streetwear outfit set.",
+        image_id=image_id,
+        tags=tags,
+        garment_type=top_garment
+    )
+    
+    bottom_product = create_single_product(
+        shop_id=shop_id,
+        title=bottom_title,
+        description=f"{description}\n\n• Matching streetwear bottoms designed to pair perfectly with the coordinate top.",
+        image_id=image_id,
+        tags=tags,
+        garment_type=bottom_garment
+    )
+
+    return {
+        "top": top_product,
+        "bottom": bottom_product
+    }
+
+# Backward compatibility alias
+create_tshirt_product = lambda shop_id, title, description, image_id, tags=None, garment_type="standard_tee": create_single_product(shop_id, title, description, image_id, tags, garment_type)
