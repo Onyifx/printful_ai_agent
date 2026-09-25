@@ -10,10 +10,13 @@ from groq import Groq
 # Import trend discovery module
 from trend_discovery import fetch_trending_niches
 
-# Import graphic engine artwork generator directly from design_generator
-from design_generator import generate_streetwear_design
+# Import visual graphic image generator
+from graphic_engine import generate_artwork
 
-from printify_client import get_shop_id, upload_artwork, create_tshirt_product
+# Import dual-product Printify client
+from printify_client import get_shop_id, upload_artwork, create_matching_set_products
+
+# Import SMTP notification module
 from notifier import send_email_report
 
 # Load environment variables from .env file
@@ -27,63 +30,59 @@ if not GROQ_API_KEY:
 # Initialize the Groq Client
 client = Groq(api_key=GROQ_API_KEY)
 
-# System prompt addition for generating high-impact streetwear graphics
+# System prompt defining streetwear matching set criteria
 STREETWEAR_PROMPT_SYSTEM = """
-You are an expert streetwear graphic designer specializing in high-converting Print-on-Demand apparel artwork for platforms like Etsy and Temu.
-
-When generating an image prompt, enforce these exact rules:
-1. DESIGN STYLE: Create bold, high-contrast, full-chest graphic tee artwork (options: Vintage Japanese Cyberpunk, Y2K Grunge, Bold Varsity Typography, Heavy Metal Dark Fantasy, High-Contrast Neon Illustrative).
-2. COMPOSITION: The graphic must cover a large surface area with intricate detail, crisp vector lines, or high-definition vintage textures.
-3. BACKGROUND: Isolated on a solid black or transparent background so it seamlessly blends into dark t-shirts.
-4. NO MOCKUPS: Generate ONLY the artwork itself—do NOT include T-shirts, hangers, models, shadows, or store backgrounds in the image.
+You are an expert Streetwear Creative Director and E-Commerce Merchandise Strategist specializing in high-converting matching two-piece outfit sets ("Up and Down" sets) for platforms like Etsy, Temu, and TikTok Shop.
 """
 
 def safe_send_email(subject: str, html_content: str):
-    """
-    Helper function to safely dispatch email notifications.
-    If email credentials are missing or failing, logs a warning instead of stopping the pipeline.
-    """
+    """Helper function to safely dispatch email notifications."""
     try:
         send_email_report(subject, html_content)
     except Exception as e:
         print(f"⚠️ Email notification skipped/failed: {e}")
 
-def generate_listing_intelligence(niche_topic: str) -> dict:
+def generate_set_intelligence(niche_topic: str) -> dict:
     """
     Executes a Multi-Model Consensus Pipeline:
-    1. Primary Creator Model generates the initial e-commerce metadata package with streetwear artwork rules.
-    2. Auditor/Refiner Model reviews, critiques, and optimizes the content for maximum conversions and SEO.
+    1. Primary Creator Model (GPT-OSS 120B) drafts artwork drawing prompts and dual-product listing metadata.
+    2. Auditor Model (Qwen 27B) optimizes artwork prompt and SEO tags for maximum conversions.
     """
-    print(f"⚡ [Groq AI Consensus Engine] Initializing multi-model workflow for: '{niche_topic}'...")
+    print(f"⚡ [Groq AI Consensus Engine] Initializing matching set workflow for: '{niche_topic}'...")
     
     creator_model = "openai/gpt-oss-120b"
     auditor_model = "qwen/qwen3.8-27b"
     
     system_instruction_creator = (
         f"{STREETWEAR_PROMPT_SYSTEM}\n\n"
-        "You are an elite E-Commerce Intelligence Engine and Senior Graphic Art Director "
-        "specializing in high-volume Print-on-Demand (POD) e-commerce. "
-        "Your mission is to generate hyper-optimized listing copy, rank-focused SEO tags, "
-        "demographic positioning, and ultra-precise image synthesis prompts optimized for streetwear t-shirt graphics. "
-        "You MUST output valid, concise JSON strictly without conversational filler."
+        "Analyze the provided niche topic and produce an end-to-end strategy for a matching 2-piece streetwear outfit set (Top + Shorts/Joggers):\n"
+        "1. image_prompt: A rich, vivid drawing prompt for an AI image generator to draw bold graphic artwork (e.g., 'Vintage 90s racing motorcycle illustration, detailed biker character, cyber retro streetwear graphic').\n"
+        "2. top_garment_type: Exactly one of ['oversized_tee', 'standard_tee', 'hoodie', 'sweatshirt'].\n"
+        "3. bottom_garment_type: Exactly one of ['sweatshorts', 'joggers'].\n"
+        "4. top_title: SEO-optimized product title for the top item.\n"
+        "5. bottom_title: SEO-optimized product title for the matching bottom item.\n"
+        "6. description: Engaging product copy describing the set aesthetic, comfort, and streetwear fit.\n"
+        "7. tags: Array of exactly 13 search tags for Etsy/Shopify.\n"
+        "You MUST output valid JSON strictly without conversational text."
     )
     
     prompt_text = f"""
-    Perform a complete product concept breakdown for a premium t-shirt listing targeting the niche: "{niche_topic}".
+    Perform a complete matching streetwear set breakdown for the trend niche: "{niche_topic}".
     
-    Generate a JSON object containing the following keys:
-    1. "title": An SEO-optimized title (between 40-80 characters) packed with high-intent keywords.
-    2. "short_description": A 2-sentence catchy sales hook highlighting lifestyle fit and aesthetic appeal.
-    3. "description": A full product description detailing graphic style, comfort, print quality, and gift positioning.
-    4. "tags": An array of exactly 13 search tags (comma-separated style keywords) formatted for Etsy/Shopify search engines.
-    5. "target_audience": Primary demographic profile (e.g., "Gamers 18-34, Synthwave enthusiasts, Cyberpunk fans").
-    6. "recommended_color_palette": Suggested apparel fabric background colors that make the print pop.
-    7. "suggested_retail_price": Float value representing the competitive retail price (e.g., 26.99).
-    8. "image_prompt": A master graphic prompt engineered for AI image generation. Must strictly follow the STREETWEAR_PROMPT_SYSTEM rules: bold, full-chest graphic tee artwork, edge-to-edge coverage, isolated on a solid black or transparent background, zero clothing mockups or human models.
+    Return a JSON object containing:
+    1. "image_prompt": Detailed visual artwork prompt.
+    2. "top_garment_type": Garment choice for the top.
+    3. "bottom_garment_type": Garment choice for the bottom.
+    4. "top_title": Product title for the top item.
+    5. "bottom_title": Product title for the bottom item.
+    6. "description": Product copy.
+    7. "tags": Exactly 13 search tags as an array of strings.
+    8. "target_audience": Primary demographic profile.
+    9. "suggested_set_price": Total retail price for the set (e.g., 64.99).
     """
 
     # Step 1: Creator Phase
-    print(f"🤖 [Creator Agent - {creator_model}] Drafting initial product package...")
+    print(f"🤖 [Creator Agent - {creator_model}] Drafting initial product package & artwork prompt...")
     try:
         response_creator = client.chat.completions.create(
             model=creator_model,
@@ -100,19 +99,19 @@ def generate_listing_intelligence(niche_topic: str) -> dict:
         print(f"⚠️ Creator model failed: {e}. Raising error...")
         raise e
 
-    # Step 2: Auditor/Consensus Phase
-    print(f"🧐 [Auditor Agent - {auditor_model}] Reviewing and optimizing metadata package for SEO and buyer conversion...")
+    # Step 2: Auditor Phase
+    print(f"🧐 [Auditor Agent - {auditor_model}] Reviewing and refining artwork prompts and listing metadata...")
     
     audit_instruction = (
         f"{STREETWEAR_PROMPT_SYSTEM}\n\n"
-        "You are a strict Chief Marketing Officer and E-Commerce Quality Assurance Auditor. "
-        "Review the provided JSON draft for a Print-on-Demand t-shirt. "
-        "Enhance the SEO keywords in the title, tighten the description hooks, ensure exactly 13 high-value search tags, "
-        "and enforce that the image prompt strictly generates full-chest streetwear artwork without mockups. "
-        "You MUST return the final, improved version as a valid JSON object maintaining the exact same keys."
+        "Review and enhance the provided JSON package for a matching streetwear set. "
+        "Ensure image_prompt describes bold, high-contrast streetwear artwork clearly. "
+        "Verify top_garment_type is one of ['oversized_tee', 'standard_tee', 'hoodie', 'sweatshirt'] and "
+        "bottom_garment_type is one of ['sweatshorts', 'joggers']. "
+        "Ensure exactly 13 SEO search tags. Return the final valid JSON object maintaining the exact same keys."
     )
     
-    audit_payload = f"Here is the draft JSON package to audit and elevate:\n{json.dumps(draft_intel, indent=2)}"
+    audit_payload = f"Here is the draft JSON package to audit:\n{json.dumps(draft_intel, indent=2)}"
 
     try:
         response_auditor = client.chat.completions.create(
@@ -122,107 +121,106 @@ def generate_listing_intelligence(niche_topic: str) -> dict:
                 {"role": "user", "content": audit_payload}
             ],
             response_format={"type": "json_object"},
-            max_tokens=1000,
+            max_tokens=1200,
             temperature=0.4,
         )
         final_intel = json.loads(response_auditor.choices[0].message.content)
-        print("✅ Multi-model consensus reached: Metadata successfully audited and upgraded!")
+        print("✅ Multi-model consensus reached: Set intelligence successfully audited!")
         return final_intel
     except Exception as e:
-        print(f"⚠️ Auditor model review skipped due to rate limit or error: {e}. Using creator draft.")
+        print(f"⚠️ Auditor model review skipped due to error: {e}. Using creator draft.")
         return draft_intel
 
 def run_pipeline(niche_topic: str):
     start_time = time.time()
     print("\n==================================================")
-    print(f"🚀 LAUNCHING AUTONOMOUS POD PIPELINE: '{niche_topic}'")
+    print(f"🚀 LAUNCHING AUTOMATED 'UP & DOWN' SET PIPELINE: '{niche_topic}'")
     print("==================================================\n")
     
     try:
-        # 1. AI Concept & Multi-Model Consensus Intelligence Generation
-        intel = generate_listing_intelligence(niche_topic)
+        # 1. AI Concept & Multi-Model Intelligence Generation
+        intel = generate_set_intelligence(niche_topic)
         
+        image_prompt = intel.get("image_prompt", f"Bold streetwear illustration of {niche_topic}")
+        top_garment = intel.get("top_garment_type", "oversized_tee").lower()
+        bottom_garment = intel.get("bottom_garment_type", "sweatshorts").lower()
+
         print("\n--------------------------------------------------")
         print(f"💡 GROQ CONSENSUS INTELLIGENCE OUTPUT:")
-        print(f"📌 Title: {intel.get('title')}")
-        print(f"🎯 Target Audience: {intel.get('target_audience')}")
+        print(f"  [Artwork Prompt]    : {image_prompt}")
+        print(f"  [Top Garment]       : {top_garment.upper()}")
+        print(f"  [Bottom Garment]    : {bottom_garment.upper()}")
+        print(f"  [Top Title]         : {intel.get('top_title')}")
+        print(f"  [Bottom Title]      : {intel.get('bottom_title')}")
         print(f"🏷️ SEO Tags ({len(intel.get('tags', []))}): {', '.join(intel.get('tags', []))}")
-        print(f"🎨 Recommended Colors: {intel.get('recommended_color_palette')}")
-        print(f"💵 Suggested Retail: ${float(intel.get('suggested_retail_price', 25.00)):.2f}")
-        print(f"🖼️ Engineered Image Prompt:\n   {intel.get('image_prompt')}")
         print("--------------------------------------------------\n")
 
-        # 2. Artwork Generation & Processing
-        filename = f"groq_{niche_topic.lower().replace(' ', '_')}.png"
-        image_path = generate_streetwear_design(title_text=intel.get("title", niche_topic), output_path=filename)
+        # 2. Artwork Generation & Processing via graphic_engine
+        filename = f"set_{niche_topic.lower().replace(' ', '_')}.png"
+        image_path = generate_artwork(concept_prompt=image_prompt, output_filename=filename)
         
         # 3. Printify Shop Connection
         shop_id = get_shop_id()
         print(f"🔑 Connected to Printify Shop ID: {shop_id}")
         
-        # 4. Artwork Upload
+        # 4. Artwork Upload (Shared between top and bottom)
         image_id = upload_artwork(image_path)
         
-        # 5. Product Creation
-        full_description = (
-            f"{intel.get('description')}\n\n"
-            f"• Target Fit: {intel.get('target_audience')}\n"
-            f"• Style Keywords: {', '.join(intel.get('tags', []))}\n"
-            f"• Care Instructions: Machine wash cold inside out with like colors."
-        )
-        
-        product = create_tshirt_product(
+        # 5. Dual-Product Creation (Top + Bottom Set)
+        set_products = create_matching_set_products(
             shop_id=shop_id,
-            title=intel.get("title", f"Custom {niche_topic} Tee"),
-            description=full_description,
-            image_id=image_id
+            top_title=intel.get("top_title", f"Custom {niche_topic} Streetwear Top"),
+            bottom_title=intel.get("bottom_title", f"Custom {niche_topic} Matching Bottoms"),
+            description=intel.get("description", "High quality streetwear piece."),
+            image_id=image_id,
+            tags=intel.get("tags"),
+            top_garment=top_garment,
+            bottom_garment=bottom_garment
         )
         
         elapsed = time.time() - start_time
         print("\n==================================================")
-        print("🎉 PIPELINE EXECUTION SUCCESSFUL!")
+        print("🎉 MATCHING OUTFIT SET PUBLISHED SUCCESSFULLY!")
         print(f"⏱️ Total Execution Time: {elapsed:.2f} seconds")
-        print(f"📦 Product Title: {product.get('title')}")
-        print(f"🆔 Printify Product ID: {product.get('id')}")
+        print(f"👕 Top Product ID    : {set_products['top'].get('id')}")
+        print(f"🩳 Bottom Product ID : {set_products['bottom'].get('id')}")
         print("==================================================")
 
-        # 6. Dispatch Success Email Report safely
+        # 6. Dispatch Success Email Report
         success_html = f"""
         <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px; background-color: #f9fff9;">
-            <h2 style="color: #27ae60;">🎉 Autonomous POD Product Published!</h2>
-            <p>Your autonomous agent discovered a live trend, designed artwork, optimized metadata, and published a new product draft on Printify.</p>
+            <h2 style="color: #27ae60;">🎉 Matching 'Up & Down' Streetwear Set Published!</h2>
+            <p>Your autonomous agent discovered a live trend, generated detailed visual artwork, and created a matching 2-piece outfit set on Printify.</p>
             <hr style="border: 0; border-top: 1px solid #eee;">
             <ul>
-                <li><b>Discovered Trend Niche:</b> {niche_topic}</li>
-                <li><b>Product Title:</b> {product.get('title')}</li>
-                <li><b>Printify Product ID:</b> {product.get('id')}</li>
+                <li><b>Discovered Trend:</b> {niche_topic}</li>
+                <li><b>Artwork Prompt:</b> {image_prompt}</li>
+                <li><b>Top Product Title:</b> {set_products['top'].get('title')} (ID: {set_products['top'].get('id')})</li>
+                <li><b>Bottom Product Title:</b> {set_products['bottom'].get('title')} (ID: {set_products['bottom'].get('id')})</li>
                 <li><b>Total Execution Time:</b> {elapsed:.2f} seconds</li>
             </ul>
-            <p style="color: #7f8c8d; font-size: 12px;">Autonomous Multi-Model AI Agent Report</p>
         </div>
         """
-        safe_send_email(f"🚀 Autonomous POD Success: {intel.get('title')}", success_html)
+        safe_send_email(f"🚀 Autonomous POD Success: Matching Set for {niche_topic}", success_html)
 
     except Exception as e:
         elapsed = time.time() - start_time
         error_message = str(e)
         print(f"\n❌ Pipeline failed with error: {error_message}")
         
-        # Dispatch Failure Email Report safely
         failure_html = f"""
         <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ffccd5; border-radius: 8px; background-color: #fff5f5;">
-            <h2 style="color: #c0392b;">❌ Autonomous POD Pipeline Failed</h2>
-            <p>The autonomous agent encountered an unhandled exception during execution.</p>
+            <h2 style="color: #c0392b;">❌ Matching Set Pipeline Failed</h2>
+            <p>The autonomous agent encountered an error during execution.</p>
             <hr style="border: 0; border-top: 1px solid #eee;">
             <ul>
                 <li><b>Niche Topic:</b> {niche_topic}</li>
                 <li><b>Error Details:</b> <code style="color: #c0392b;">{error_message}</code></li>
-                <li><b>Time Elapsed Before Failure:</b> {elapsed:.2f} seconds</li>
+                <li><b>Execution Time:</b> {elapsed:.2f} seconds</li>
             </ul>
-            <p style="color: #7f8c8d; font-size: 12px;">Autonomous Multi-Model AI Agent Error Report</p>
         </div>
         """
-        safe_send_email(f"⚠️ Autonomous POD Pipeline Failure: {niche_topic}", failure_html)
+        safe_send_email(f"⚠️ Pipeline Failure: {niche_topic}", failure_html)
         raise e
 
 if __name__ == "__main__":
