@@ -4,36 +4,53 @@ import base64
 import requests
 from dotenv import load_dotenv
 
+# Load environment variables from .env
 load_dotenv()
-
-PRINTIFY_API_TOKEN = os.getenv("PRINTIFY_TOKEN")
-PRINTIFY_SHOP_ID = os.getenv("SHOP_ID")
-
-HEADERS = {
-    "Authorization": f"Bearer {PRINTIFY_API_TOKEN}",
-    "Content-Type": "application/json",
-    "User-Agent": "POD-Automation-Agent/1.0"
-}
 
 BASE_URL = "https://api.printify.com/v1"
 
-def get_shop_id():
-    """Retrieves or returns the configured Printify Shop ID."""
-    if PRINTIFY_SHOP_ID:
-        return PRINTIFY_SHOP_ID
+def get_clean_api_key() -> str:
+    """
+    Retrieves and sanitizes the Printify API token/key by stripping newlines, 
+    carriage returns, spaces, and quotes that cause HTTP header errors.
+    Supports both PRINTIFY_TOKEN and PRINTIFY_API_KEY environment variables.
+    """
+    key = os.getenv("PRINTIFY_TOKEN") or os.getenv("PRINTIFY_API_KEY", "")
+    if not key:
+        raise ValueError("❌ PRINTIFY_TOKEN or PRINTIFY_API_KEY is missing from environment variables.")
+    return key.strip().replace("\n", "").replace("\r", "").strip('"').strip("'")
+
+def get_clean_shop_id() -> str:
+    """Retrieves and sanitizes the configured Printify Shop ID if present."""
+    shop_id = os.getenv("SHOP_ID") or os.getenv("PRINTIFY_SHOP_ID", "")
+    return shop_id.strip().replace("\n", "").replace("\r", "").strip('"').strip("'")
+
+def get_headers() -> dict:
+    """Builds sanitized HTTP headers dynamically for Printify API requests."""
+    return {
+        "Authorization": f"Bearer {get_clean_api_key()}",
+        "Content-Type": "application/json",
+        "User-Agent": "POD-Automation-Agent/1.0"
+    }
+
+def get_shop_id() -> str:
+    """Retrieves configured Shop ID or dynamically fetches the first active shop from Printify."""
+    shop_id = get_clean_shop_id()
+    if shop_id:
+        return shop_id
     
     url = f"{BASE_URL}/shops.json"
-    res = requests.get(url, headers=HEADERS)
+    res = requests.get(url, headers=get_headers(), timeout=30)
     if res.status_code == 200:
         shops = res.json()
         if shops:
             return str(shops[0]['id'])
-    raise Exception(f"Failed to fetch Printify Shop ID: {res.text}")
+    raise Exception(f"Failed to fetch Printify Shop ID: {res.status_code} - {res.text}")
 
 def upload_artwork(file_path: str, retries: int = 4, delay: int = 10) -> str:
     """
-    Uploads an image file to Printify Media Library with extended timeout and retry logic.
-    Endpoint: POST /v1/uploads/images.json
+    Encodes artwork as base64 and uploads it to the Printify Media Library
+    with retry logic, dynamic headers, and extended timeout for large files.
     """
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"Artwork file not found at path: {file_path}")
@@ -54,12 +71,12 @@ def upload_artwork(file_path: str, retries: int = 4, delay: int = 10) -> str:
 
     for attempt in range(1, retries + 1):
         try:
-            # Extended timeout to 120 seconds for large 3000x3000px payloads
-            res = requests.post(url, json=payload, headers=HEADERS, timeout=120)
+            # Extended timeout to 120 seconds for high-resolution graphics
+            res = requests.post(url, json=payload, headers=get_headers(), timeout=120)
             if res.status_code in [200, 201]:
                 image_data = res.json()
                 print(f"✅ Upload successful! Media Image ID: {image_data.get('id')}")
-                return image_data.get('id')
+                return str(image_data.get('id'))
             elif res.status_code in [502, 503, 504]:
                 print(f"⚠️ Printify API returned server error {res.status_code}. Retrying in {delay} seconds (Attempt {attempt}/{retries})...")
                 time.sleep(delay)
@@ -78,31 +95,24 @@ def get_valid_blueprint_config(blueprint_id: int = 6, max_variants: int = 4):
     Dynamically fetches an active print provider and valid variant IDs 
     handling both list and dict API response formats safely.
     """
-    # Step 1: Get available print providers for this blueprint
     providers_url = f"{BASE_URL}/catalog/blueprints/{blueprint_id}/print_providers.json"
-    res = requests.get(providers_url, headers=HEADERS)
+    res = requests.get(providers_url, headers=get_headers(), timeout=30)
     if res.status_code != 200:
         raise Exception(f"Failed to fetch print providers for blueprint {blueprint_id}: {res.text}")
     
     providers_data = res.json()
-    
-    # Safely handle whether the API returns a list directly or a dictionary
     providers = providers_data if isinstance(providers_data, list) else providers_data.get("print_providers", [])
     
     if not providers:
         raise Exception(f"No active print providers found for blueprint {blueprint_id}")
     
-    # Pick the first available print provider from the list
     print_provider_id = providers[0]["id"]
     print(f"ℹ️ Selected Print Provider ID: {print_provider_id} for Blueprint {blueprint_id}")
 
-    # Step 2: Get active variants for this provider & blueprint
     variants_url = f"{BASE_URL}/catalog/blueprints/{blueprint_id}/print_providers/{print_provider_id}/variants.json"
-    res = requests.get(variants_url, headers=HEADERS)
+    res = requests.get(variants_url, headers=get_headers(), timeout=30)
     if res.status_code == 200:
         variants_data = res.json()
-        
-        # Safely handle variants response format as well
         variants = variants_data if isinstance(variants_data, list) else variants_data.get("variants", [])
         
         if variants:
@@ -113,6 +123,7 @@ def get_valid_blueprint_config(blueprint_id: int = 6, max_variants: int = 4):
 
 def create_tshirt_product(shop_id: str, title: str, description: str, image_id: str) -> dict:
     """Creates a print-on-demand t-shirt product draft on Printify using live configuration."""
+    print(f"👕 Creating T-Shirt product in Printify Shop ID '{shop_id}'...")
     url = f"{BASE_URL}/shops/{shop_id}/products.json"
 
     blueprint_id = 6  # Gildan 5000
@@ -148,7 +159,9 @@ def create_tshirt_product(shop_id: str, title: str, description: str, image_id: 
         ]
     }
 
-    res = requests.post(url, json=payload, headers=HEADERS)
+    res = requests.post(url, json=payload, headers=get_headers(), timeout=30)
     if res.status_code in [200, 201]:
-        return res.json()
+        product_data = res.json()
+        print(f"🎉 Product created successfully! Product ID: {product_data.get('id')}")
+        return product_data
     raise Exception(f"Failed to create product on Printify: {res.text}")
