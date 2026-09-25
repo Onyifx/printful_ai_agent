@@ -112,7 +112,7 @@ def generate_listing_intelligence(niche_topic: str) -> dict:
                 {"role": "user", "content": audit_payload}
             ],
             response_format={"type": "json_object"},
-            max_tokens=2048,  # Increased from 1000 to ensure full response generation
+            max_tokens=1000,  # Increased from 1000 to ensure full response generation
             temperature=0.4,
         )
         final_intel = json.loads(response_auditor.choices[0].message.content)
